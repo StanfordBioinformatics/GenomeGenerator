@@ -1,4 +1,29 @@
-package com.stanford.genomegenerator;
+/*
+ * Copyright (C) 2015 Google Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not
+ * use this file except in compliance with the License. You may obtain a copy of
+ * the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations under
+ * the License.
+ */
+
+package com.stanford.dataflow;
+
+import com.google.cloud.dataflow.sdk.Pipeline;
+import com.google.cloud.dataflow.sdk.options.PipelineOptionsFactory;
+import com.google.cloud.dataflow.sdk.transforms.Create;
+import com.google.cloud.dataflow.sdk.transforms.DoFn;
+import com.google.cloud.dataflow.sdk.transforms.ParDo;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.api.services.bigquery.model.TableFieldSchema;
 import com.google.api.services.bigquery.model.TableRow;
@@ -75,6 +100,29 @@ class GenomicPosition {
 		System.out.println(dists);
 	}
 	
+	public boolean isValid() {
+		if (!(genotypes.size() > 0)) {
+			return false;
+		} else if (!(probabilities.size() > 0)) {
+			return false;
+		} else if (!(counts.size() > 0)) {
+			return false;
+		} else if (genotypes.size() != probabilities.size()) {
+			return false;
+		} else if (ref == null) {
+			return false;
+		} else if (alt == null) {
+			return false;
+		} else if (referenceName == null) {
+			return false;
+		} else if (start == null) {
+			return false;
+		} else if (end == null) {
+			return false;
+		}
+		return true;
+	}
+	
 	// Set the genotype distributions based on the counts column from the input table
 	// Keep three lists of genotypes, counts, and probabilities.  Each index in each table
 	// corresponds with a genotype.
@@ -109,7 +157,7 @@ class GenomicPosition {
 		for (int i=0; i<genotypes.size(); i++) {
 			if (random <= (probabilities.get(i))) {
 				if (genotypes.get(i) == null) {
-					return(null);
+					return(randomGenotype);
 				}
 				String[] alleles = genotypes.get(i).split(",");
 				for (String a: alleles) {
@@ -175,16 +223,19 @@ class GenomicPosition {
  */
 @SuppressWarnings("serial")
 public class GenomeGenerator {
+	  //private final Aggregator<Long, Long> variantsGenerated =
+	  //      createAggregator("variantsGenerated", new Sum.SumLongFn());
+		      
 	  // Default options - may be set from command line 
 	  private static final String GENOTYPE_DISTRIBUTION_TABLE = 
 	      "gbsc-gcp-project-mvp:simulated_data.aaa_genotypte_distributions_brca1";
 
 	  private static final String OUTPUT_TABLE = 
-		  "gbsc-gcp-project-mvp:simulated_data.default_output";
+		  "gbsc-gcp-project-mvp:simulated_data.default_output_500";
 	  
 	  private static final int GENOME_COUNT = 460; // Need to put this in the table - hard coding for now.
 	  
-	  private static final int RANDOM_GENOME_COUNT = 10;
+	  private static final int RANDOM_GENOME_COUNT = 500;
 
 	  /* 
 	   * ProcessRowFn
@@ -192,6 +243,11 @@ public class GenomeGenerator {
 	   * Process an individual BigQuery row from the input table.  Load a GenomicPosition object and
 	   * output info for a new row.
 	   */
+	 
+	  static List NullArray() {
+		  List nullList = new ArrayList();
+		  return nullList;
+	  }
 	  
 	  static class ProcessRowFn extends DoFn<TableRow, TableRow> {
 		private int randomCount = 0;
@@ -218,6 +274,11 @@ public class GenomeGenerator {
 	      GenomicPosition position = new GenomicPosition(referenceName, start, end, ref, alt, genotypeCounts, GENOME_COUNT);
 	      
 	      // Generate genomic data for the requested number of genomes.  Store call-subrows for insertion into main row later
+	      
+	      if (!position.isValid()) {
+	    	  return;
+	      }
+	      
 	      List<TableRow> calls = new ArrayList<>();
 	      int altCount = 0;
 	      for (int i=1; i <= randomCount; i++) {
@@ -228,13 +289,15 @@ public class GenomeGenerator {
 	    	  }
 		      TableRow call = new TableRow()
 		                .set("call_set_name", call_set_name)
-		                .set("genotype", randomGenotype);
-		      			//.set("AD", position.randomAD())
-		      			//.set("DP", position.randomDP())
-		      			//.set("QUAL", position.randomQual())
-		      			//.set("GQ", position.randomGQ())
-		      			//.set("genotype_likelihood", position.randomLikelihood())
-		      			//.set("FILTER", position.getFilter());
+		                .set("genotype", randomGenotype)
+		      			.set("AD", position.randomAD())
+		      			.set("DP", position.randomDP())
+		      			.set("QUAL", position.randomQual())
+		      			.set("GQ", position.randomGQ())
+		      			.set("genotype_likelihood", position.randomLikelihood())
+		      			.set("FILTER", position.getFilter())
+		      			.set("QC", NullArray());
+		      
 		      calls.add(call);
 	      }
 	      
@@ -250,14 +313,18 @@ public class GenomeGenerator {
 		          .set("end", position.end)
 		          .set("reference_bases", position.ref)
 		          .set("alternate_bases", position.alt)
-		          //.set("quality", position.randomQual())
+		          .set("quality", position.randomQual())
+		          .set("QC", NullArray())
+		          .set("names", NullArray())
+		          .set("filter", NullArray())
 	      		  .set("call", calls);
-	      
+	      //variantsGenerated.addValue(1L);
 	      c.output(newRow);
 	    }
 	  }
 
-
+	  
+	  
 	  static class GenerateGenomes
 	      extends PTransform<PCollection<TableRow>, PCollection<TableRow>> {
 		private int randomCount = 0;
@@ -283,19 +350,19 @@ public class GenomeGenerator {
 	    @Description("Table to read from, specified as "
 	        + "<project_id>:<dataset_id>.<table_id>")
 	    @Default.String(GENOTYPE_DISTRIBUTION_TABLE)
-	    String getInput();
-	    void setInput(String value);
+	    String getInputTable();
+	    void setInputTable(String inputTable);
 
 	    @Description("BigQuery table to write to, specified as "
 	        + "<project_id>:<dataset_id>.<table_id>. The dataset must already exist.")
 	    @Default.String(OUTPUT_TABLE)
-	    String getOutput();
-	    void setOutput(String value);
+	    String getOutputTable();
+	    void setOutputTable(String outputTable);
 	    
 	    @Description("Number of genomes to generate")
 		@Default.Integer(RANDOM_GENOME_COUNT)
-	    Integer getRandomGenomeCount();
-		void setRandomGenomeCount(Integer value);
+	    Integer getNewGenomeCount();
+		void setNewGenomeCount(Integer newGenomeCount);
 	  }
 	  
 	  private static TableSchema getTableSchema() {
@@ -336,10 +403,10 @@ public class GenomeGenerator {
 
 	    Pipeline p = Pipeline.create(options);
 
-	    p.apply(BigQueryIO.Read.from(options.getInput()))
-	     .apply(new GenerateGenomes(options.getRandomGenomeCount()))
+	    p.apply(BigQueryIO.Read.from(options.getInputTable()))
+	     .apply(new GenerateGenomes(options.getNewGenomeCount()))
 	     .apply(BigQueryIO.Write
-	        .to(options.getOutput())
+	        .to(options.getOutputTable())
 	        .withSchema(getTableSchema())
 	        .withCreateDisposition(BigQueryIO.Write.CreateDisposition.CREATE_IF_NEEDED)
 	        .withWriteDisposition(BigQueryIO.Write.WriteDisposition.WRITE_TRUNCATE));

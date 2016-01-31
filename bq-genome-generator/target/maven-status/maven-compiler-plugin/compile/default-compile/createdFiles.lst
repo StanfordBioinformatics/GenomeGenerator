@@ -1,0 +1,13 @@
+com/stanford/dataflow/RandomVariantAppender$GenerateVariantKeys.class
+com/stanford/dataflow/RandomVariantAppender$GenerateRow.class
+com/stanford/dataflow/GenomeGenerator$GenerateGenomes.class
+com/stanford/dataflow/RandomVariantAppender.class
+com/stanford/dataflow/GenomicPosition.class
+com/stanford/dataflow/RandomVariantAppender$SNPGenerator.class
+com/stanford/dataflow/RandomVariantAppender$ExtractSampleIDs.class
+com/stanford/dataflow/GenomeGenerator.class
+com/stanford/dataflow/GenomeGenerator$ProcessRowFn.class
+com/stanford/dataflow/RandomVariantAppender$Options.class
+com/stanford/dataflow/GenomeGenerator$Options.class
+com/stanford/dataflow/RandomGenomicPosition.class
+com/stanford/dataflow/RandomVariantAppender$SNPRandomizer.class
