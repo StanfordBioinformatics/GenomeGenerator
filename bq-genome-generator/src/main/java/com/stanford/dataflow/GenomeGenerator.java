@@ -68,9 +68,9 @@ class GenomicPosition {
 	public List<String> alt = new ArrayList<String>();
 	private int total = 0;
 	private String genotypeCounts = "";
-	private List<String> genotypes = new ArrayList<String>();
+	public List<String> genotypes = new ArrayList<String>();
 	private List<Integer> counts = new ArrayList<Integer>();
-	private List<Float> probabilities = new ArrayList<Float>();
+	public List<Float> probabilities = new ArrayList<Float>();
 	
 	// Constructor
 	GenomicPosition(String referenceName, String start, String end, String ref, 
@@ -169,6 +169,15 @@ class GenomicPosition {
 		return(randomGenotype);
 	}
 	
+	public List<String> returnGenotype(int index) {
+		String[] alleles = genotypes.get(index).split(",");
+		List<String> genotype = new ArrayList<String>();
+		for (String a: alleles) {
+			genotype.add(a);
+		}
+		return genotype;
+	}
+	
 	// Randomly generate an integer for the AD column
 	public List<Integer> randomAD() {
 		List<Integer> ads = new ArrayList<Integer>();
@@ -196,6 +205,35 @@ class GenomicPosition {
 	// Randomly generate an integer for the GQ column
 	public int randomGQ() {
 		return(getRandomInteger(10,100));
+	}
+	
+	// Randomly generate an integer for the AD column
+	public List<Integer> fastAD() {
+		List<Integer> ads = new ArrayList<Integer>();
+		ads.add(30);
+		return(ads);
+	}
+
+	// Randomly generate a list of floats for the likelihood column
+	public List<Float> fastLikelihood() {
+		List<Float> likelihood = new ArrayList<Float>();
+		likelihood.add((float) -30.0);
+		return(likelihood);
+	}
+	
+	// Randomly generate an integer for the DP column
+	public int fastDP() {
+		return(30);
+	}
+	
+	// Randomly generate a float for the quality column
+	public float fastQual() {
+		return((float) 30);
+	}
+	
+	// Randomly generate an integer for the GQ column
+	public int fastGQ() {
+		return(30);
 	}
 	
 	// Output 'PASS' for the filter column
@@ -254,9 +292,14 @@ public class GenomeGenerator {
 		/**
 		 * @param randomCount
 	     */
- 	    public ProcessRowFn(int randomCount) {
+		private boolean fastMode = false;
+		/**
+		 * @param randomCount
+	     */
+ 	    public ProcessRowFn(int randomCount, boolean fastMode) {
  	    	super();
 		    this.randomCount = randomCount;
+		    this.fastMode = fastMode;
  	    }
 	    @Override
 	    public void processElement(ProcessContext c) {
@@ -274,56 +317,94 @@ public class GenomeGenerator {
 	      GenomicPosition position = new GenomicPosition(referenceName, start, end, ref, alt, genotypeCounts, GENOME_COUNT);
 	      
 	      // Generate genomic data for the requested number of genomes.  Store call-subrows for insertion into main row later
-	      
 	      if (!position.isValid()) {
 	    	  return;
 	      }
 	      
-	      List<TableRow> calls = new ArrayList<>();
-	      int altCount = 0;
-	      for (int i=1; i <= randomCount; i++) {
-	    	  String call_set_name = "R" + String.format("%06d", i);
-	    	  List<String> randomGenotype = position.emitGenotype();
-	    	  if (randomGenotype != null && randomGenotype.contains("1")) {
-	    		  altCount += 1;
-	    	  }
-		      TableRow call = new TableRow()
-		                .set("call_set_name", call_set_name)
-		                .set("genotype", randomGenotype)
-		      			.set("AD", position.randomAD())
-		      			.set("DP", position.randomDP())
-		      			.set("QUAL", position.randomQual())
-		      			.set("GQ", position.randomGQ())
-		      			.set("genotype_likelihood", position.randomLikelihood())
-		      			.set("FILTER", position.getFilter())
-		      			.set("QC", NullArray());
-		      
-		      calls.add(call);
-	      }
-	      
-	      // If no alternate alleles are generated, don't insert a row
-	      if (altCount == 0) {
+	      TableRow newRow = generateRow(position, randomCount, fastMode);
+	      if (newRow.size() == 0) {
 	    	  return;
 	      }
-	      
-	      // Define complete row
-	      TableRow newRow = new TableRow()
-		          .set("reference_name", position.referenceName)
-		          .set("start", position.start)
-		          .set("end", position.end)
-		          .set("reference_bases", position.ref)
-		          .set("alternate_bases", position.alt)
-		          .set("quality", position.randomQual())
-		          .set("QC", NullArray())
-		          .set("names", NullArray())
-		          .set("filter", NullArray())
-	      		  .set("call", calls);
-	      //variantsGenerated.addValue(1L);
 	      c.output(newRow);
-	    }
-	  }
-
 	  
+	    }
+
+	  } 
+	  
+	  private static TableRow generateRow(GenomicPosition position, int sampleCount, boolean fastMode) {
+    	  List<TableRow> calls = new ArrayList<>();
+    	  
+    	  
+    	  if (!fastMode) {
+    		  int altCount = 0;
+    		  for (int i=1; i <= sampleCount; i++) {
+    			  String call_set_name = "R" + String.format("%06d", i);
+    			  List<String> randomGenotype = position.emitGenotype();
+    			  if (randomGenotype != null && randomGenotype.contains("1")) {
+    				  altCount += 1;
+    			  }
+    			  TableRow call = new TableRow()
+    					  	.set("call_set_name", call_set_name)
+    					  	.set("genotype", randomGenotype)
+	      					.set("AD", position.randomAD())
+	      					.set("DP", position.randomDP())
+	      					.set("QUAL", position.randomQual())
+	      					.set("GQ", position.randomGQ())
+	      					.set("genotype_likelihood", position.randomLikelihood())
+	      					.set("FILTER", position.getFilter())
+	      					.set("QC", NullArray());
+	      
+    			  calls.add(call);
+    		  }
+    		  
+    		  // If no alternate alleles are generated, don't insert a row
+        	  if (altCount == 0) {
+        		  TableRow emptyRow = new TableRow();
+        		  return emptyRow;
+        	  }
+    	  } else {
+    		  int frequencyIndex = 0;
+    		  for (int i=1; i <= sampleCount; i++) {	
+    			 if (i < position.probabilities.get(frequencyIndex) * sampleCount) {
+       			  	String call_set_name = "R" + String.format("%06d", i);
+       			  	List<String> fastGenotype = position.returnGenotype(frequencyIndex);
+       			  	TableRow call = new TableRow()
+       					  	.set("call_set_name", call_set_name)
+       					  	.set("genotype", fastGenotype)
+   	      					.set("AD", position.fastAD())
+   	      					.set("DP", position.fastDP())
+   	      					.set("QUAL", position.fastQual())
+   	      					.set("GQ", position.fastGQ())
+   	      					.set("genotype_likelihood", position.fastLikelihood())
+   	      					.set("FILTER", position.getFilter())
+   	      					.set("QC", NullArray());
+       			  	
+       			  	calls.add(call);
+       			  	
+    			 } else {
+    				 frequencyIndex++;
+    				 i--;
+    			 }
+    		  }
+    	  }
+    		  
+
+      
+    	  // Define complete row
+    	  TableRow newRow = new TableRow()
+    			  .set("reference_name", position.referenceName)
+    			  .set("start", position.start)
+    			  .set("end", position.end)
+    			  .set("reference_bases", position.ref)
+    			  .set("alternate_bases", position.alt)
+    			  .set("quality", position.randomQual())
+    			  .set("QC", NullArray())
+    			  .set("names", NullArray())
+    			  .set("filter", NullArray())
+    			  .set("call", calls);
+    	  
+    	  return newRow;
+	  }
 	  
 	  static class GenerateGenomes
 	      extends PTransform<PCollection<TableRow>, PCollection<TableRow>> {
@@ -331,15 +412,20 @@ public class GenomeGenerator {
 		/**
 		 * @param randomCount
 		 */
-	 	public GenerateGenomes(int randomCount) {
+		private boolean fastMode = false;
+		/**
+		 * @param randomCount
+		 */
+	 	public GenerateGenomes(int randomCount, boolean fastMode) {
 	 	    super();
 			this.randomCount = randomCount;
+			this.fastMode = fastMode;
 	 	}
 	    @Override
 	    public PCollection<TableRow> apply(PCollection<TableRow> rows) {
 
 	      PCollection<TableRow> results = rows.apply(
-	          ParDo.of(new ProcessRowFn(randomCount)));
+	          ParDo.of(new ProcessRowFn(randomCount, fastMode)));
 
 	      return results;
 	    }
@@ -363,6 +449,11 @@ public class GenomeGenerator {
 		@Default.Integer(RANDOM_GENOME_COUNT)
 	    Integer getNewGenomeCount();
 		void setNewGenomeCount(Integer newGenomeCount);
+		
+	    @Description("Fast mode - genotypes are not as nicely distributed as normal.")
+		@Default.Boolean(false)
+	    Boolean getFastMode();
+		void setFastMode(Boolean fastMode);
 	  }
 	  
 	  private static TableSchema getTableSchema() {
@@ -404,7 +495,7 @@ public class GenomeGenerator {
 	    Pipeline p = Pipeline.create(options);
 
 	    p.apply(BigQueryIO.Read.from(options.getInputTable()))
-	     .apply(new GenerateGenomes(options.getNewGenomeCount()))
+	     .apply(new GenerateGenomes(options.getNewGenomeCount(), options.getFastMode()))
 	     .apply(BigQueryIO.Write
 	        .to(options.getOutputTable())
 	        .withSchema(getTableSchema())
