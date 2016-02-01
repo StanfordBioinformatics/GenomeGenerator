@@ -170,6 +170,10 @@ class GenomicPosition {
 	}
 	
 	public List<String> returnGenotype(int index) {
+		if (genotypes.get(index) == null) {
+			List<String> genotype = new ArrayList<String>();
+			return genotype;
+		}
 		String[] alleles = genotypes.get(index).split(",");
 		List<String> genotype = new ArrayList<String>();
 		for (String a: alleles) {
@@ -364,6 +368,7 @@ public class GenomeGenerator {
         	  }
     	  } else {
     		  int frequencyIndex = 0;
+    		  
     		  for (int i=1; i <= sampleCount; i++) {	
     			 if (i <= position.probabilities.get(frequencyIndex) * sampleCount) {
        			  	String call_set_name = "R" + String.format("%06d", i);
