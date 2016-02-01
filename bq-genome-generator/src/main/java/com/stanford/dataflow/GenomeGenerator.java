@@ -365,7 +365,7 @@ public class GenomeGenerator {
     	  } else {
     		  int frequencyIndex = 0;
     		  for (int i=1; i <= sampleCount; i++) {	
-    			 if (i < position.probabilities.get(frequencyIndex) * sampleCount) {
+    			 if (i <= position.probabilities.get(frequencyIndex) * sampleCount) {
        			  	String call_set_name = "R" + String.format("%06d", i);
        			  	List<String> fastGenotype = position.returnGenotype(frequencyIndex);
        			  	TableRow call = new TableRow()
@@ -381,9 +381,9 @@ public class GenomeGenerator {
        			  	
        			  	calls.add(call);
        			  	
-    			 } else {
-    				 frequencyIndex++;
+    			 } else if (frequencyIndex < position.probabilities.size() - 1) {
     				 i--;
+    				 frequencyIndex++;
     			 }
     		  }
     	  }
